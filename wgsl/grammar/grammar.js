@@ -1,4 +1,4 @@
-// Copyright (C) [2025] World Wide Web Consortium,
+// Copyright (C) [2026] World Wide Web Consortium,
 // (Massachusetts Institute of Technology, European Research Consortium for
 // Informatics and Mathematics, Keio University, Beihang).
 // All Rights Reserved.
@@ -38,7 +38,6 @@ module.exports = grammar({
 
     inline: $ => [
         $.global_decl,
-        $._reserved,
     ],
 
     // WGSL has no parsing conflicts.
@@ -121,13 +120,15 @@ module.exports = grammar({
 
         workgroup_size_attr: $ => choice(seq('@', 'workgroup_size', '(', $.expression, optional(','), ')'), seq('@', 'workgroup_size', '(', $.expression, ',', $.expression, optional(','), ')'), seq('@', 'workgroup_size', '(', $.expression, ',', $.expression, ',', $.expression, optional(','), ')')),
 
+        subgroup_size_attr: $ => seq('@', 'subgroup_size', '(', $.expression, optional(','), ')'),
+
         vertex_attr: $ => seq('@', 'vertex'),
 
         fragment_attr: $ => seq('@', 'fragment'),
 
         compute_attr: $ => seq('@', 'compute'),
 
-        attribute: $ => choice(seq('@', $.ident_pattern_token, optional($.argument_expression_list)), $.align_attr, $.binding_attr, $.blend_src_attr, $.builtin_attr, $.const_attr, $.diagnostic_attr, $.group_attr, $.id_attr, $.interpolate_attr, $.invariant_attr, $.location_attr, $.must_use_attr, $.size_attr, $.workgroup_size_attr, $.vertex_attr, $.fragment_attr, $.compute_attr),
+        attribute: $ => choice(seq('@', $.ident_pattern_token, optional($.argument_expression_list)), $.align_attr, $.binding_attr, $.blend_src_attr, $.builtin_attr, $.const_attr, $.diagnostic_attr, $.group_attr, $.id_attr, $.interpolate_attr, $.invariant_attr, $.location_attr, $.must_use_attr, $.size_attr, $.workgroup_size_attr, $.subgroup_size_attr, $.vertex_attr, $.fragment_attr, $.compute_attr),
 
         diagnostic_control: $ => seq('(', $.severity_control_name, ',', $.diagnostic_rule_name, optional(','), ')'),
 
@@ -141,7 +142,7 @@ module.exports = grammar({
 
         type_specifier: $ => $.template_elaborated_ident,
 
-        template_elaborated_ident: $ => seq($.ident, $._disambiguate_template, optional($.template_list)),
+        template_elaborated_ident: $ => seq($.ident, optional($.template_list)),
 
         variable_or_value_statement: $ => choice($.variable_decl, seq($.variable_decl, '=', $.expression), seq('let', $.optionally_typed_ident, '=', $.expression), seq('const', $.optionally_typed_ident, '=', $.expression)),
 
@@ -173,7 +174,7 @@ module.exports = grammar({
 
         lhs_expression: $ => choice(seq($.core_lhs_expression, optional($.component_or_swizzle_specifier)), seq('*', $.lhs_expression), seq('&', $.lhs_expression)),
 
-        core_lhs_expression: $ => choice(seq($.ident, $._disambiguate_template), seq('(', $.lhs_expression, ')')),
+        core_lhs_expression: $ => choice($.ident, seq('(', $.lhs_expression, ')'), $.call_expression),
 
         multiplicative_expression: $ => choice($.unary_expression, seq($.multiplicative_expression, $.multiplicative_operator, $.unary_expression)),
 
@@ -297,6 +298,8 @@ module.exports = grammar({
 
         _comment: $ => /\/\/.*/,
 
-        _blankspace: $ => /[\u0020\u0009\u000a\u000b\u000c\u000d\u0085\u200e\u200f\u2028\u2029]/u
+        _blankspace: $ => /[\u0020\u0009\u000a\u000b\u000c\u000d\u0085\u200e\u200f\u2028\u2029]/u,
+
+        _reserved: $ => choice('NULL', 'Self', 'abstract', 'active', 'alignas', 'alignof', 'as', 'asm', 'asm_fragment', 'async', 'attribute', 'auto', 'await', 'become', 'cast', 'catch', 'class', 'co_await', 'co_return', 'co_yield', 'coherent', 'column_major', 'common', 'compile', 'compile_fragment', 'concept', 'const_cast', 'consteval', 'constexpr', 'constinit', 'crate', 'debugger', 'decltype', 'delete', 'demote', 'demote_to_helper', 'do', 'dynamic_cast', 'enum', 'explicit', 'export', 'extends', 'extern', 'external', 'fallthrough', 'filter', 'final', 'finally', 'friend', 'from', 'fxgroup', 'get', 'goto', 'groupshared', 'highp', 'impl', 'implements', 'import', 'inline', 'instanceof', 'interface', 'layout', 'lowp', 'macro', 'macro_rules', 'match', 'mediump', 'meta', 'mod', 'module', 'move', 'mut', 'mutable', 'namespace', 'new', 'nil', 'noexcept', 'noinline', 'nointerpolation', 'non_coherent', 'noncoherent', 'noperspective', 'null', 'nullptr', 'of', 'operator', 'package', 'packoffset', 'partition', 'pass', 'patch', 'pixelfragment', 'precise', 'precision', 'premerge', 'priv', 'protected', 'pub', 'public', 'readonly', 'ref', 'regardless', 'register', 'reinterpret_cast', 'require', 'resource', 'restrict', 'self', 'set', 'shared', 'sizeof', 'smooth', 'snorm', 'static', 'static_assert', 'static_cast', 'std', 'subroutine', 'super', 'target', 'template', 'this', 'thread_local', 'throw', 'trait', 'try', 'type', 'typedef', 'typeid', 'typename', 'typeof', 'union', 'unless', 'unorm', 'unsafe', 'unsized', 'use', 'using', 'varying', 'virtual', 'volatile', 'wgsl', 'where', 'with', 'writeonly', 'yield'),
     }
 })
