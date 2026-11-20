@@ -6947,7 +6947,6 @@ following members:
                                                 |storageLayout|.{{GPUFormatlessStorageTextureBindingLayout/formatFamily}}.
                                         - |storageTextureView|.{{GPUTextureView/[[descriptor]]}}.{{GPUTextureViewDescriptor/usage}}
                                             includes {{GPUTextureUsage/STORAGE_BINDING}}.
-                                        - |texture|'s {{GPUTextureDescriptor/sampleCount}} is `1`.
                                         - |storageTextureView|.{{GPUTextureView/[[descriptor]]}}.{{GPUTextureViewDescriptor/mipLevelCount}} must be 1.
                                         - |storageTextureView|.{{GPUTextureView/[[descriptor]]}}.{{GPUTextureViewDescriptor/swizzle}} must be `"rgba"`.
                                         -

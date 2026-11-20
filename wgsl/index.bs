@@ -5082,22 +5082,11 @@ The <dfn noexport>storage texture component type</dfn> is the scalar type of the
 shader value in the [=storage-texel-formats=] table for an exact-format storage texture,
 or its resolved scalar type parameter for a formatless storage texture.
 
-Two storage texture types are the same if and only if their dimensionality, arrayedness,
-resolved format-or-family parameter, and access mode are the same.
-Exact-format and formatless storage texture types are distinct, even when an exact format's
-component type matches the formatless type's scalar parameter. There is no implicit conversion
-between them.
-
-Formatless storage texture types and their texture built-in overloads do not require an
-[=enable directive=], a [=requires-directive=], or a WebGPU device feature for shader module creation.
-The WebGPU feature {{GPUFeatureName/"formatless-storage-textures"}} gates formatless
-bind group layouts and their automatic inference, not these language forms.
-
 <div class='example wgsl global-scope' id=example-formatless-storage-textures>
   <xmp highlight=wgsl>
     alias Component = f32;
     @group(0) @binding(0) var source: texture_storage_2d<Component, read>;
-    @group(0) @binding(1) var destination: texture_storage_2d<f32, write>;
+    @group(0) @binding(1) var destination: texture_storage_2d<rgba8unorm, write>;
 
     @compute @workgroup_size(1)
     fn copy_texel() {
@@ -11533,7 +11522,8 @@ where compatibility is defined by the following table.
   <tr><td>[=type/read-only storage texture=]
       <td>{{GPUStorageTextureAccess/"read-only"}}
   <tr><td>[=type/formatless storage texture=] with [=access/write=] access
-      <td rowspan=3>{{GPUBindGroupLayoutEntry/formatlessStorageTexture}}
+      <td rowspan=3>{{GPUBindGroupLayoutEntry/formatlessStorageTexture}} or
+          {{GPUBindGroupLayoutEntry/storageTexture}}
       <td rowspan=3>{{GPUStorageTextureAccess}}
       <td>{{GPUStorageTextureAccess/"write-only"}} or {{GPUStorageTextureAccess/"read-write"}}
   <tr><td>[=type/formatless storage texture=] with [=access/read_write=] access
@@ -11548,15 +11538,11 @@ where compatibility is defined by the following table.
 See the [$validating GPUProgrammableStage|WebGPU API$]
 specification for interface validation requirements.
 
-A formatless storage variable may use an ordinary
+Note: A formatless storage variable may use an ordinary
 {{GPUBindGroupLayoutEntry/storageTexture}} binding if its exact format has the variable's
 component type. This does not require {{GPUFeatureName/"formatless-storage-textures"}}.
 An exact-format storage variable cannot use a
 {{GPUBindGroupLayoutEntry/formatlessStorageTexture}} binding.
-
-Note: A formatless variable that is not in the selected shader's resource interface does not
-require a binding or a device feature, even if it is used by an unselected entry point or shares
-a module with used exact-format storage variables.
 
 ### Buffer Binding Determines Runtime-Sized Array Element Count ### {#buffer-binding-determines-runtime-sized-array-element-count}
 
