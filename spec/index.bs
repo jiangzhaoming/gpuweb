@@ -2650,8 +2650,7 @@ Any {{GPUAdapter}} returned by {{GPU/requestAdapter()}} must provide the followi
         by |feature|, as defined in [[#feature-dependencies]].
 - If {{GPUFeatureName/"formatless-storage-textures"}} is supported, every valid combination
     of it with the adapter's other supported features must support all concrete formats and
-    accesses permitted by [$supports formatless storage texture access$], with the
-    [[#storage-texture-pipeline-initialization|storage texture pipeline initialization]] guarantees.
+    accesses permitted by [$supports formatless storage texture access$].
 - All supported limits must be either the [=limit/default=] value or [=limit/better=].
 - All [=limit class/alignment|alignment-class=] limits must be powers of 2.
 - {{supported limits/maxBindingsPerBindGroup}} must be must be &ge;
@@ -6494,6 +6493,9 @@ exact {{GPUTextureFormat}}. Its members are:
         The required {{GPUTextureViewDescriptor/dimension}} of texture views bound to this binding.
 </dl>
 
+A pipeline with a {{GPUBindGroupLayoutEntry/formatlessStorageTexture}} binding must remain
+usable with every concrete view permitted by that binding and the device's enabled features.
+
 The <dfn>texture format family</dfn> of a storage-capable {{GPUTextureFormat}} is the
 {{GPUTextureFormatFamily}} corresponding to its shader component type in the
 [[WGSL#texel-formats|WGSL texel format table]]:
@@ -6507,7 +6509,7 @@ The <dfn>texture format family</dfn> of a storage-capable {{GPUTextureFormat}} i
     <tr><td><dfn enum-value for=GPUTextureFormatFamily>"uint"</dfn><td>`u32`
 </table>
 
-Note: The floating-point family includes normalized formats. It does not imply that a format is [=filterable=].
+Note: The floating-point family includes normalized formats.
 
 <div algorithm data-timeline=const>
     <dfn abstract-op>storage texture binding layout</dfn>(|entry|)
@@ -6690,10 +6692,6 @@ if and only if all of the following conditions are satisfied:
 </div>
 
 If bind groups layouts are [=group-equivalent=] they can be interchangeably used in all contents.
-
-Note: An exact {{GPUBindGroupLayoutEntry/storageTexture}} entry is not equivalent to a
-{{GPUBindGroupLayoutEntry/formatlessStorageTexture}} entry, even if the exact format has the
-same [=texture format family=]. The [=binding member=] is part of the entry's identity.
 
 <h3 id=gpubindgroup data-dfn-type=interface>`GPUBindGroup`
 <span id=gpu-bind-group></span>
@@ -6893,15 +6891,17 @@ following members:
 
                                             <dl class=switch>
                                                 : {{GPUSamplerBindingType/"filtering"}}
-                                                :: |resource|.{{GPUSampler/[[isComparison]]}} is `false`.
+                                                ::
+                                                    - |resource|.{{GPUSampler/[[isComparison]]}} is `false`.
 
                                                 : {{GPUSamplerBindingType/"non-filtering"}}
                                                 ::
-                                                    |resource|.{{GPUSampler/[[isFiltering]]}} is `false`.
-                                                    |resource|.{{GPUSampler/[[isComparison]]}} is `false`.
+                                                    - |resource|.{{GPUSampler/[[isFiltering]]}} is `false`.
+                                                    - |resource|.{{GPUSampler/[[isComparison]]}} is `false`.
 
                                                 : {{GPUSamplerBindingType/"comparison"}}
-                                                :: |resource|.{{GPUSampler/[[isComparison]]}} is `true`.
+                                                ::
+                                                    - |resource|.{{GPUSampler/[[isComparison]]}} is `true`.
                                             </dl>
 
                                     : {{GPUBindGroupLayoutEntry/texture}}
@@ -6935,16 +6935,24 @@ following members:
                                         - Let |storageTextureView| be [$get as texture view$](|resource|).
                                         - Let |texture| be |storageTextureView|.{{GPUTextureView/[[texture]]}}.
                                         - Let |storageLayout| be [$storage texture binding layout$](|layoutBinding|).
-                                        - |storageLayout|'s `viewDimension`
+                                        - |storageLayout|.`viewDimension`
                                             is equal to |storageTextureView|'s {{GPUTextureViewDescriptor/dimension}}.
                                         - Let |format| be |storageTextureView|.{{GPUTextureView/[[descriptor]]}}.{{GPUTextureViewDescriptor/format}}.
-                                        - If |storageLayout| is a {{GPUStorageTextureBindingLayout}},
-                                            |storageLayout|.{{GPUStorageTextureBindingLayout/format}} is equal to |format|.
-                                        - Otherwise:
-                                            - [$supports formatless storage texture access$](|this|, |format|,
-                                                |storageLayout|.{{GPUFormatlessStorageTextureBindingLayout/access}}) is `true`.
-                                            - The [=texture format family=] of |format| is
-                                                |storageLayout|.{{GPUFormatlessStorageTextureBindingLayout/formatFamily}}.
+                                        - If |storageLayout| is:
+
+                                            <dl class=switch>
+                                                : {{GPUStorageTextureBindingLayout}}
+                                                ::
+                                                    - |storageLayout|.{{GPUStorageTextureBindingLayout/format}} is equal to |format|.
+
+                                                : {{GPUFormatlessStorageTextureBindingLayout}}
+                                                ::
+                                                    - [$supports formatless storage texture access$](|this|, |format|,
+                                                        |storageLayout|.{{GPUFormatlessStorageTextureBindingLayout/access}}) is `true`.
+                                                    - The [=texture format family=] of |format| is
+                                                        |storageLayout|.{{GPUFormatlessStorageTextureBindingLayout/formatFamily}}.
+                                            </dl>
+
                                         - |storageTextureView|.{{GPUTextureView/[[descriptor]]}}.{{GPUTextureViewDescriptor/usage}}
                                             includes {{GPUTextureUsage/STORAGE_BINDING}}.
                                         - |storageTextureView|.{{GPUTextureView/[[descriptor]]}}.{{GPUTextureViewDescriptor/mipLevelCount}} must be 1.
@@ -7818,12 +7826,6 @@ dictionary GPUPipelineDescriptorBase
 
         Note: If {{GPUAutoLayoutMode/"auto"}} is used the pipeline cannot share {{GPUBindGroup}}s
         with any other pipelines.
-
-        If a resource [=statically used=] by a selected shader entry point has a
-        [=type/formatless storage texture=] type,
-        {{GPUAutoLayoutMode/"auto"}} requires {{GPUFeatureName/"formatless-storage-textures"}}.
-        Without that feature, an explicit layout must provide the concrete storage format.
-        Unused formatless declarations do not impose this requirement.
 </dl>
 
 <script type=idl>
@@ -7889,44 +7891,6 @@ interface mixin GPUPipelineBase {
             </div>
         </div>
 </dl>
-
-### Storage texture pipeline initialization ### {#storage-texture-pipeline-initialization}
-
-<div algorithm data-timeline=device>
-    To perform <dfn abstract-op>storage texture pipeline initialization</dfn> for
-    {{GPUPipelineBase}} |pipeline| using its validated {{GPUPipelineLayout}} |layout|:
-
-    1. For each {{GPUProgrammableStage}} |stageDesc| in the descriptor used to create |pipeline|:
-        1. Let |shaderStage| be the {{GPUShaderStage}} at which |stageDesc| is used in |pipeline|.
-        1. Let |entryPoint| be [$get the entry point$](|shaderStage|, |stageDesc|).
-            [=Assert=] |entryPoint| is not `null`.
-        1. For each [=type/formatless storage texture=] resource |resource|
-            [=statically used=] by |entryPoint|:
-            1. Let |entry| be the {{GPUBindGroupLayoutEntry}} in |layout| corresponding to
-                |resource|'s group and binding.
-            1. If |entry|.{{GPUBindGroupLayoutEntry/storageTexture}} is [=map/exist|provided=],
-                use |entry|.{{GPUBindGroupLayoutEntry/storageTexture}}.{{GPUStorageTextureBindingLayout/format}}
-                as the concrete texel format when compiling accesses to |resource|.
-            1. Otherwise, compile accesses to |resource| without specializing them to a concrete texel format.
-    1. Complete all shader translation, compilation, and executable pipeline creation needed for
-        these storage texture bindings as part of |pipeline|'s initialization, without waiting
-        for a texture view or bind group.
-
-    A pipeline with a {{GPUBindGroupLayoutEntry/formatlessStorageTexture}} binding must remain
-    usable with every concrete view permitted by that binding and the device's enabled features,
-    without compiling, creating, or selecting a concrete-format-specialized pipeline variant.
-    Precompiling a set of exact-format variants does not satisfy this requirement.
-
-    Binding resources, encoding commands, drawing, dispatching, submitting work, and first use
-    must not trigger storage-format-dependent shader compilation or pipeline creation.
-
-    Note: Exact and formatless bindings may coexist at different binding numbers. Specializing
-    an exact-layout binding does not specialize other, formatless-layout bindings in the pipeline.
-
-    Note: This does not require an immediate pipeline creation call to block the content timeline.
-    Its initialization may still run on the device timeline. Async pipeline creation resolves only
-    after the initialized pipeline is ready, as usual.
-</div>
 
 ### Default pipeline layout ### {#default-pipeline-layout}
 
@@ -8034,8 +7998,6 @@ run the following [=device timeline=] steps:
                     </dl>
 
                 1. If |resource| has a [=type/formatless storage texture=] type:
-                    1. If {{GPUFeatureName/"formatless-storage-textures"}} is not [=enabled for=] |pipeline|,
-                        return `null` (which will cause the creation of the pipeline to fail).
                     1. Let |formatlessLayout| be a new {{GPUFormatlessStorageTextureBindingLayout}}.
                     1. Set |formatlessLayout|.{{GPUFormatlessStorageTextureBindingLayout/formatFamily}} to
                         the {{GPUTextureFormatFamily}} corresponding to |resource|'s scalar type.
@@ -8043,7 +8005,15 @@ run the following [=device timeline=] steps:
                     1. Set |formatlessLayout|.{{GPUFormatlessStorageTextureBindingLayout/viewDimension}}
                         to |resource|'s dimension.
                     1. Set |entry|.{{GPUBindGroupLayoutEntry/formatlessStorageTexture}} to |formatlessLayout|.
-                1. Otherwise:
+
+                    Note: Inferring this {{GPUFormatlessStorageTextureBindingLayout}} dictionary does not
+                    require {{GPUFeatureName/"formatless-storage-textures"}}. After merging,
+                    |device|.{{GPUDevice/createBindGroupLayout()|createBindGroupLayout}}(|groupDesc|) rejects any remaining
+                    {{GPUBindGroupLayoutEntry/formatlessStorageTexture}} entries if the feature is not enabled
+                    for |device|.
+
+                    Otherwise:
+
                     1. Let |storageTextureLayout| be a new {{GPUStorageTextureBindingLayout}}.
                     1. Set |storageTextureLayout|.{{GPUStorageTextureBindingLayout/format}} to |resource|'s format.
                     1. Set |storageTextureLayout|.{{GPUStorageTextureBindingLayout/access}} to |access|.
@@ -8052,58 +8022,99 @@ run the following [=device timeline=] steps:
 
             1. Set |groupCount| to max(|groupCount|, |group| + 1).
 
-            1. If no entry in |groupDescs|[|group|].{{GPUBindGroupLayoutDescriptor/entries}}
-                has {{GPUBindGroupLayoutEntry/binding}} equal to |binding|:
-                1. Append |entry| to |groupDescs|[|group|].{{GPUBindGroupLayoutDescriptor/entries}}.
-                1. Continue with the next |resource|.
+            1. If |groupDescs|[|group|].{{GPUBindGroupLayoutDescriptor/entries}} has an entry
+                |previousEntry| with {{GPUBindGroupLayoutEntry/binding}} equal to |binding|:
 
-            1. If |groupDescs|[|group|] has an entry |previousEntry| with {{GPUBindGroupLayoutEntry/binding}} equal to |binding|:
+                1. If the defined [=binding member=] for |entry| differs from that for |previousEntry|,
+                    and either member is neither {{GPUBindGroupLayoutEntry/storageTexture}} nor
+                    {{GPUBindGroupLayoutEntry/formatlessStorageTexture}}, return `null`.
 
-                1. If |entry| has different {{GPUBindGroupLayoutEntry/visibility}} than |previousEntry|:
+                1. If |entry|.{{GPUBindGroupLayoutEntry/visibility}} differs from
+                    |previousEntry|.{{GPUBindGroupLayoutEntry/visibility}}:
 
                     1. Add the bits set in |entry|.{{GPUBindGroupLayoutEntry/visibility}} into |previousEntry|.{{GPUBindGroupLayoutEntry/visibility}}
 
-                1. If |entry| or |previousEntry| provides {{GPUBindGroupLayoutEntry/formatlessStorageTexture}}:
-                    1. If either does not provide {{GPUBindGroupLayoutEntry/formatlessStorageTexture}},
-                        return `null`.
-                    1. Let |newLayout| be |entry|.{{GPUBindGroupLayoutEntry/formatlessStorageTexture}}.
-                    1. Let |previousLayout| be |previousEntry|.{{GPUBindGroupLayoutEntry/formatlessStorageTexture}}.
-                    1. If |newLayout|.{{GPUFormatlessStorageTextureBindingLayout/formatFamily}} differs from
-                        |previousLayout|.{{GPUFormatlessStorageTextureBindingLayout/formatFamily}}, or
-                        |newLayout|.{{GPUFormatlessStorageTextureBindingLayout/viewDimension}} differs from
-                        |previousLayout|.{{GPUFormatlessStorageTextureBindingLayout/viewDimension}}, return `null`.
-                    1. If |newLayout|.{{GPUFormatlessStorageTextureBindingLayout/access}} differs from
-                        |previousLayout|.{{GPUFormatlessStorageTextureBindingLayout/access}}:
-                        1. If either value is {{GPUStorageTextureAccess/"read-only"}}, return `null`.
-                        1. Set |previousLayout|.{{GPUFormatlessStorageTextureBindingLayout/access}}
-                            to {{GPUStorageTextureAccess/"read-write"}}.
-                    1. Continue with the next |resource|.
+                1. Let |newLayout| be the value of the defined [=binding member=] of |entry|.
+                1. Let |previousLayout| be the value of the defined [=binding member=] of |previousEntry|.
+                1. If the defined [=binding member=] for |entry| is:
 
-                1. If |resource| is for a buffer binding and |entry| has greater
-                    {{GPUBindGroupLayoutEntry/buffer}}.{{GPUBufferBindingLayout/minBindingSize}}
-                    than |previousEntry|:
+                    <dl class=switch>
+                        : {{GPUBindGroupLayoutEntry/buffer}}
+                        ::
+                            1. [=Assert=] |newLayout|.{{GPUBufferBindingLayout/hasDynamicOffset}} and
+                                |previousLayout|.{{GPUBufferBindingLayout/hasDynamicOffset}} are both `false`.
+                            1. If |newLayout|.{{GPUBufferBindingLayout/type}} differs from
+                                |previousLayout|.{{GPUBufferBindingLayout/type}}, return `null`.
+                            1. Set |previousLayout|.{{GPUBufferBindingLayout/minBindingSize}} to
+                                max(|newLayout|.{{GPUBufferBindingLayout/minBindingSize}},
+                                    |previousLayout|.{{GPUBufferBindingLayout/minBindingSize}}).
 
-                    1. Set |previousEntry|.{{GPUBindGroupLayoutEntry/buffer}}.{{GPUBufferBindingLayout/minBindingSize}}
-                        to |entry|.{{GPUBindGroupLayoutEntry/buffer}}.{{GPUBufferBindingLayout/minBindingSize}}.
+                        : {{GPUBindGroupLayoutEntry/sampler}}
+                        ::
+                            1. If |newLayout|.{{GPUSamplerBindingLayout/type}} differs from
+                                |previousLayout|.{{GPUSamplerBindingLayout/type}}, return `null`.
 
-                1. If |resource| is a sampled texture binding and |entry| has different
-                    {{GPUBindGroupLayoutEntry/texture}}.{{GPUTextureBindingLayout/sampleType}} than |previousEntry|
-                    and both |entry| and |previousEntry| have {{GPUBindGroupLayoutEntry/texture}}.{{GPUTextureBindingLayout/sampleType}}
-                    of either {{GPUTextureSampleType/"float"}} or {{GPUTextureSampleType/"unfilterable-float"}}:
-                    1. Set |previousEntry|.{{GPUBindGroupLayoutEntry/texture}}.{{GPUTextureBindingLayout/sampleType}} to
-                        {{GPUTextureSampleType/"float"}}.
+                        : {{GPUBindGroupLayoutEntry/texture}}
+                        ::
+                            1. If |newLayout|.{{GPUTextureBindingLayout/viewDimension}} differs from
+                                |previousLayout|.{{GPUTextureBindingLayout/viewDimension}}, or
+                                |newLayout|.{{GPUTextureBindingLayout/multisampled}} differs from
+                                |previousLayout|.{{GPUTextureBindingLayout/multisampled}}, return `null`.
+                            1. If |newLayout|.{{GPUTextureBindingLayout/sampleType}} differs from
+                                |previousLayout|.{{GPUTextureBindingLayout/sampleType}}:
+                                1. If either value is neither {{GPUTextureSampleType/"float"}} nor
+                                    {{GPUTextureSampleType/"unfilterable-float"}}, return `null`.
+                                1. Set |previousLayout|.{{GPUTextureBindingLayout/sampleType}} to
+                                    {{GPUTextureSampleType/"float"}}.
 
-                1. If any other property is unequal between |entry| and |previousEntry|:
+                        : {{GPUBindGroupLayoutEntry/storageTexture}}
+                        : {{GPUBindGroupLayoutEntry/formatlessStorageTexture}}
+                        ::
+                            1. If |newLayout|.`viewDimension` differs from |previousLayout|.`viewDimension`, return `null`.
+                            1. If |newLayout|.`access` differs from |previousLayout|.`access`:
+                                1. If either value is {{GPUStorageTextureAccess/"read-only"}}, return `null`.
+                                1. If |previousLayout|.`access` is {{GPUStorageTextureAccess/"write-only"}}:
+                                    1. Set |previousLayout|.`access` to {{GPUStorageTextureAccess/"read-write"}}.
+                            1. If |newLayout| and |previousLayout| are:
 
-                    1. Return `null` (which will cause the creation of the pipeline to fail).
+                                <dl class=switch>
+                                    : Both {{GPUStorageTextureBindingLayout}} dictionaries
+                                    ::
+                                        1. If |newLayout|.{{GPUStorageTextureBindingLayout/format}} differs from
+                                            |previousLayout|.{{GPUStorageTextureBindingLayout/format}}, return `null`.
 
-                1. If |resource| is a storage texture binding,
-                    |entry|.|storageTexture|.{{GPUStorageTextureBindingLayout/access}} is {{GPUStorageTextureAccess/"read-write"}},
-                    |previousEntry|.|storageTexture|.{{GPUStorageTextureBindingLayout/access}} is {{GPUStorageTextureAccess/"write-only"}}, and
-                    |previousEntry|.|storageTexture|.{{GPUStorageTextureBindingLayout/format}} is compatible with
-                    {{GPUTextureUsage/STORAGE_BINDING}} and {{GPUStorageTextureAccess/"read-write"}} according to the [[#plain-color-formats]] table:
+                                    : Both {{GPUFormatlessStorageTextureBindingLayout}} dictionaries
+                                    ::
+                                        1. If |newLayout|.{{GPUFormatlessStorageTextureBindingLayout/formatFamily}} differs from
+                                            |previousLayout|.{{GPUFormatlessStorageTextureBindingLayout/formatFamily}}, return `null`.
 
-                    1. Set |previousEntry|.|storageTexture|.{{GPUStorageTextureBindingLayout/access}} to {{GPUStorageTextureAccess/"read-write"}}.
+                                    : One {{GPUStorageTextureBindingLayout}} dictionary and one {{GPUFormatlessStorageTextureBindingLayout}} dictionary
+                                    ::
+                                        1. Let |exactLayout| be the {{GPUStorageTextureBindingLayout}} dictionary.
+                                        1. Let |genericLayout| be the {{GPUFormatlessStorageTextureBindingLayout}} dictionary.
+                                        1. If the [=texture format family=] of |exactLayout|.{{GPUStorageTextureBindingLayout/format}}
+                                            differs from |genericLayout|.{{GPUFormatlessStorageTextureBindingLayout/formatFamily}}, return `null`.
+                                        1. If |previousLayout| is a {{GPUFormatlessStorageTextureBindingLayout}}:
+                                            1. Let |mergedLayout| be a copy of |exactLayout|.
+                                            1. Set |mergedLayout|.{{GPUStorageTextureBindingLayout/access}} to |previousLayout|.`access`.
+                                            1. Remove the {{GPUBindGroupLayoutEntry/formatlessStorageTexture}} member from |previousEntry|.
+                                            1. Set |previousEntry|.{{GPUBindGroupLayoutEntry/storageTexture}} to |mergedLayout|.
+
+                                        Note: Compatible exact-format and formatless storage resources [=statically used=] at
+                                        the same group and binding in different shader stages can share an exact-format default
+                                        layout. For example, a vertex shader using `texture_storage_2d<r32float, read>` and a
+                                        fragment shader using `texture_storage_2d<f32, read>` infer
+                                        `storageTexture: { format: "r32float", access: "read-only" }` at that binding.
+                                </dl>
+
+                        : {{GPUBindGroupLayoutEntry/externalTexture}}
+                        ::
+                            1. Continue with the next |resource|.
+                    </dl>
+
+                Otherwise:
+
+                1. Append |entry| to |groupDescs|[|group|].{{GPUBindGroupLayoutDescriptor/entries}}.
 
         1. If there is an immediate data variable that is [=statically used=] by |entryPoint|
             ([=assert=] there is at most one):
@@ -8113,14 +8124,14 @@ run the following [=device timeline=] steps:
     1. Let |groupLayouts| be a new [=list=].
     1. For each |i| from 0 to |groupCount| - 1, inclusive:
         1. Let |groupDesc| be |groupDescs|[|i|].
-        1. Let |bindGroupLayout| be the result of calling |device|.{{GPUDevice/createBindGroupLayout()}}(|groupDesc|).
+        1. Let |bindGroupLayout| be the result of calling |device|.{{GPUDevice/createBindGroupLayout()|createBindGroupLayout}}(|groupDesc|).
         1. Set |bindGroupLayout|.{{GPUBindGroupLayout/[[exclusivePipeline]]}} to |pipeline|.
         1. Append |bindGroupLayout| to |groupLayouts|.
 
     1. Let |desc| be a new {{GPUPipelineLayoutDescriptor}}.
     1. Set |desc|.{{GPUPipelineLayoutDescriptor/bindGroupLayouts}} to |groupLayouts|.
     1. Set |desc|.{{GPUPipelineLayoutDescriptor/immediateSize}} to |immediateSize|.
-    1. Return |device|.{{GPUDevice/createPipelineLayout()}}(|desc|).
+    1. Return |device|.{{GPUDevice/createPipelineLayout()|createPipelineLayout}}(|desc|).
 </div>
 
 <h4 id=gpuprogrammablestage data-dfn-type=dictionary>`GPUProgrammableStage`
@@ -8266,10 +8277,6 @@ typedef double GPUPipelineConstantValue; // May represent WGSL's bool, f32, i32,
     1. |entryPoint| |must| not be `null`.
     1. For each |binding| that is [=statically used=] by |entryPoint|:
         - [$validating shader binding$](|binding|, |layout|) |must| return `true`.
-
-        Note: Formatless storage declarations outside the selected entry point's resource interface
-        require neither a layout entry nor the formatless device feature, including when that entry
-        point uses ordinary storage texture declarations elsewhere in the same module.
     1. For each call |call| to a texture builtin function in any of the
         [=functions in the shader stage=] rooted at |entryPoint|:
         1. Let |textureBinding| be the texture binding used in |call|.
@@ -8471,16 +8478,23 @@ typedef double GPUPipelineConstantValue; // May represent WGSL's bool, f32, i32,
                         :: The access mode `A` is `read_write` or `write`.
                     </dl>
                 ::
-                    If |storageLayout| is a {{GPUStorageTextureBindingLayout}}:
-                    - If |variable| has a [=type/formatless storage texture=] type, `T` is the
-                        WGSL scalar type corresponding to the [=texture format family=] of
-                        |storageLayout|.{{GPUStorageTextureBindingLayout/format}}.
-                    - Otherwise, the texel format `T` equals
-                        |storageLayout|.{{GPUStorageTextureBindingLayout/format}}.
-                ::
-                    Otherwise, |variable| has a [=type/formatless storage texture=] type, and `T`
-                    is the WGSL scalar type corresponding to
-                    |storageLayout|.{{GPUFormatlessStorageTextureBindingLayout/formatFamily}}.
+                    If |storageLayout| is:
+
+                    <dl class=switch>
+                        : {{GPUStorageTextureBindingLayout}}
+                        ::
+                            - If |variable| has a [=type/formatless storage texture=] type, `T` is the
+                                WGSL scalar type corresponding to the [=texture format family=] of
+                                |storageLayout|.{{GPUStorageTextureBindingLayout/format}}.
+                            - Otherwise, the texel format `T` equals
+                                |storageLayout|.{{GPUStorageTextureBindingLayout/format}}.
+
+                        : {{GPUFormatlessStorageTextureBindingLayout}}
+                        ::
+                            - |variable| has a [=type/formatless storage texture=] type.
+                            - `T` is the WGSL scalar type corresponding to
+                                |storageLayout|.{{GPUFormatlessStorageTextureBindingLayout/formatFamily}}.
+                    </dl>
             </dl>
 </div>
 
@@ -8617,7 +8631,6 @@ dictionary GPUComputePipelineDescriptor
                             |device|.limits.{{supported limits/maxComputeWorkgroupSizeZ}}].
                     </div>
 
-                1. Perform [$storage texture pipeline initialization$] for |pipeline| using |layout|.
                 1. If any [=pipeline-creation error|pipeline-creation=] [=uncategorized errors=]
                     result from the implementation of pipeline creation,
                     [$generate an internal error$], [$invalidate$] |pipeline| and return.
@@ -8877,7 +8890,6 @@ dictionary GPURenderPipelineDescriptor
                         1. |layout|.{{GPUPipelineLayout/[[bindGroupLayouts]]}}.[=list/size=] + |vertexBufferCount| must be &le;
                             |this|.{{GPUObjectBase/[[device]]}}.{{device/[[limits]]}}.{{supported limits/maxBindGroupsPlusVertexBuffers}}.
                     </div>
-                1. Perform [$storage texture pipeline initialization$] for |pipeline| using |layout|.
                 1. If any [=pipeline-creation error|pipeline-creation=] [=uncategorized errors=]
                     result from the implementation of pipeline creation,
                     [$generate an internal error$], [$invalidate$] |pipeline| and return.
@@ -17831,18 +17843,25 @@ New WGSL extensions:
 
 When enabled:
 
-- Allows {{GPUBindGroupLayoutEntry/formatlessStorageTexture}} entries specifying a
-    {{GPUTextureFormatFamily}} instead of an exact {{GPUTextureFormat}}.
-- Allows [[#default-pipeline-layout|automatic layouts]] for shaders using formatless storage textures.
-- Permits the concrete storage formats and accesses defined by
-    [$supports formatless storage texture access$], following the device's enabled ordinary
-    texture-format features. The three packed formats remain write-only through formatless layouts,
-    and {{GPUTextureFormat/"bgra8unorm"}} writes additionally require {{GPUFeatureName/"bgra8unorm-storage"}}.
+- Allows {{GPUFormatlessStorageTextureBindingLayout}} to be used through the
+    {{GPUBindGroupLayoutEntry/formatlessStorageTexture}} member when calling
+    {{GPUDevice/createBindGroupLayout()}}.
+- Allows {{GPUDevice/createBindGroup()}} to bind compatible texture views to these entries when
+    their format family matches the binding's {{GPUFormatlessStorageTextureBindingLayout/formatFamily}}
+    and their format/access combination is supported by
+    [$supports formatless storage texture access$].
 
-This feature does not gate WGSL declarations or built-in overloads, and enables no WGSL
-extension. Without it, a formatless shader may still use an explicit exact-format
-{{GPUBindGroupLayoutEntry/storageTexture}} layout. Both paths use
-[$storage texture pipeline initialization$], without depending on future bound resources.
+Supported formats and accesses follow the device's enabled ordinary texture-format features.
+The packed formats {{GPUTextureFormat/"rgb10a2uint"}}, {{GPUTextureFormat/"rgb10a2unorm"}}, and
+{{GPUTextureFormat/"rg11b10ufloat"}} remain limited to {{GPUStorageTextureAccess/"write-only"}}
+through formatless bindings. Writes to {{GPUTextureFormat/"bgra8unorm"}} additionally require
+{{GPUFeatureName/"bgra8unorm-storage"}}.
+
+WGSL formatless storage texture types and built-in overloads do not require this feature
+or a WGSL extension. Without this feature, formatless storage variables can still use
+ordinary {{GPUBindGroupLayoutEntry/storageTexture}} entries with an exact format, either
+in an explicit layout or inferred from compatible exact-format declarations at the same
+binding in other shader stages.
 
 <!--
     **** End of Feature Index ****
